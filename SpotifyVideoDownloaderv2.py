@@ -7,14 +7,78 @@ from queue import Queue
 import json
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
+from youtube_search import YoutubeSearch
+from pytube import YouTube
 import requests
 
 
 isOn = False
 t1 = []
 
-def dispatch(*args, **kwargs):
-    print("ts")
+def dispatch(out_q, URI, dirname, choice):
+    def download(out_q, song, dirname, choice, n):
+        url = "https://youtube.com" + song['url_suffix']
+        choice = ytdchoices.get()
+
+        if(len(url)>1):
+            yt = YouTube(url)
+            if(choice == choices[0]):
+                select = yt.streams.filter(progressive=True).first()
+
+            elif(choice == choices[1]):
+                select = yt.streams.filter(progressive=True,file_extension='mp4').last()
+
+            elif(choice == choices[2]):
+                select = yt.streams.filter(only_audio=True).first()
+        
+        select.download(dirname)
+        out_q.put(CurrentOP.insert(n, "downloaded " + song['title'], fg = "green"))
+    
+    ytdError.config(text=" ")
+    manCheck.delete(0,'end')
+
+    username = "Test_1"
+    playlist_id = URI
+
+    try:
+        results = sp.user_playlist(username, playlist_id, 'tracks')
+    except Exception:
+        out_q.put(ytdError.config(text="Error, URI not found"))
+        return
+    
+    playlist = []
+    for i in range(0, len(results['tracks']['items'])):
+        r = results['tracks']['items'][i]['track']
+        playlist.append(r)
+        out_q.put(DisPlay.insert(i, r['name'] + " " + r['artists'][0]['name']))
+
+    if not (len(playlist) > 1):
+        out_q.put(ytdError.config(text="found playlist empty"))
+        return
+    
+    for i in range(0, len(playlist)):
+        try:
+            YT = YoutubeSearch(playlist[i]['name'] + " " + playlist[i]['artists'][0]['name'], max_results=5).to_dict()
+        except Exception:
+            return None
+
+        if YT is not None:
+
+            for i in range(0, len(YT), 1):
+                splitDur = YT[i]['duration'].split(':')
+                durVid = int(splitDur[0]) * 60 + int(splitDur[1])
+                durSong = playlist[i]['duration_ms'] // 1000 + 60
+                print(splitDur, durVid, durSong)
+                if durVid <= durSong:
+                    x = i
+                    break
+            
+            if x != None:
+                Thread(target = download, args = (YT[int(x)], dirname, choice, i)).start()
+                out_q.put(CurrentOp.insert(i, '\n Downloading... \n' + YT[int(x)]['title']))
+
+    
+
 
 if __name__ == "__main__":
     
@@ -62,13 +126,17 @@ if __name__ == "__main__":
     root.geometry("1500x800")
 
     #__end def screen__
-
+    q = Queue()
     def Start():
-        q = Queue()
-        t1 = Thread(target = dispatch, args = (q, SpUrl, dirname))
+        URI = ytdEntry.get()
+        choice = ytdchoices.get()
+        t1 = Thread(target = dispatch, args = (q, URI, dirname, choice))
         t1.start()
     
-    
+    f = q.get()
+    if q != None:
+        f()
+
 
 #define needed screen attributes
     #Ytd Link Label
