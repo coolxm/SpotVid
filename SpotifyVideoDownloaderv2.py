@@ -94,13 +94,12 @@ def dispatch(out_q, URI, dirname, choice):
             
             if x != None:
                 downloadlist.append(YT[int(x)])
+
+            out_q.put(CurrentOp.insert(i, YT[int(x)]['title']))
         
     workers = 10
     with ThreadPoolExecutor(max_workers=workers) as excecutor:
         excecutor.map(ytsearch, range(len(playlist)))
-    
-    ln = len(downloadlist)
-    out_q.put([CurrentOp.insert(i, downloadlist[i]['title']) for i in range(ln)])
 
     workers = 10
     with ThreadPoolExecutor(max_workers=workers) as excecutor:
@@ -108,8 +107,6 @@ def dispatch(out_q, URI, dirname, choice):
 
     out_q.put(CurrentOp.delete(0, 'end'))
     out_q.put(CurrentOp.insert(0, 'Done'))
-
-    out_q.put(started = False)
 
     
 
