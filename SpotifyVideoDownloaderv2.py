@@ -2,21 +2,39 @@ import tkinter as tk
 from tkinter import filedialog as fd
 from tkinter import ttk
 from PIL import ImageTk
-from threading import Thread
+import threading
 from queue import Queue
-import json
-import spotipy
+from json import load
+from spotipy import Spotify
 from spotipy.oauth2 import SpotifyClientCredentials
 from youtube_search import YoutubeSearch
 from pytube import YouTube
 import requests
+from itertools import repeat
+from concurrent.futures import ThreadPoolExecutor
 
 
 isOn = False
 t1 = []
+started = False
 
 def dispatch(out_q, URI, dirname, choice):
-    def download(out_q, song, dirname, choice, n):
+
+    ##load in credentials
+    try:
+        credentials = load(open(requests.get('http://localhost:8080/Oauth')))
+        print('went online')
+    except Exception:
+        credentials = load(open('spotAuth.json'))
+        
+    client_id = credentials['client_id']
+    client_secret = credentials['client_secret']
+    client_credentials_manager = SpotifyClientCredentials(client_id=client_id,client_secret=client_secret)
+    sp = Spotify(client_credentials_manager=client_credentials_manager)
+
+    out_q.put(ytdError.config(text="connected",fg="green"))
+
+    def download(song, out_q, dirname, choice):
         url = "https://youtube.com" + song['url_suffix']
         choice = ytdchoices.get()
 
@@ -32,8 +50,7 @@ def dispatch(out_q, URI, dirname, choice):
                 select = yt.streams.filter(only_audio=True).first()
         
         select.download(dirname)
-        out_q.put(CurrentOP.insert(n, "downloaded " + song['title'], fg = "green"))
-    
+        print(song['title'] + f" name = {threading.current_thread().name}")
     ytdError.config(text=" ")
     manCheck.delete(0,'end')
 
@@ -42,7 +59,7 @@ def dispatch(out_q, URI, dirname, choice):
 
     try:
         results = sp.user_playlist(username, playlist_id, 'tracks')
-    except Exception:
+    except Exception:    
         out_q.put(ytdError.config(text="Error, URI not found"))
         return
     
@@ -52,11 +69,13 @@ def dispatch(out_q, URI, dirname, choice):
         playlist.append(r)
         out_q.put(DisPlay.insert(i, r['name'] + " " + r['artists'][0]['name']))
 
-    if not (len(playlist) > 1):
+    if not (len(playlist) >= 1):
         out_q.put(ytdError.config(text="found playlist empty"))
         return
-    
-    for i in range(0, len(playlist)):
+
+    downloadlist = []
+    def ytsearch(i):
+        #define youtube url's
         try:
             YT = YoutubeSearch(playlist[i]['name'] + " " + playlist[i]['artists'][0]['name'], max_results=5).to_dict()
         except Exception:
@@ -74,26 +93,28 @@ def dispatch(out_q, URI, dirname, choice):
                     break
             
             if x != None:
-                Thread(target = download, args = (YT[int(x)], dirname, choice, i)).start()
-                out_q.put(CurrentOp.insert(i, '\n Downloading... \n' + YT[int(x)]['title']))
+                downloadlist.append(YT[int(x)])
+        
+    workers = 10
+    with ThreadPoolExecutor(max_workers=workers) as excecutor:
+        excecutor.map(ytsearch, range(len(playlist)))
+    
+    ln = len(downloadlist)
+    out_q.put([CurrentOp.insert(i, downloadlist[i]['title']) for i in range(ln)])
+
+    workers = 10
+    with ThreadPoolExecutor(max_workers=workers) as excecutor:
+        excecutor.map(download, downloadlist, repeat(q), repeat(dirname), repeat(choice))
+
+    out_q.put(CurrentOp.delete(0, 'end'))
+    out_q.put(CurrentOp.insert(0, 'Done'))
+
+    out_q.put(started = False)
 
     
 
 
 if __name__ == "__main__":
-    
-##load in credentials
-    try:
-        credentials = json.load(open(requests.get('http://localhost:8080/Oauth')))
-        print('went online')
-    except Exception:
-        credentials = json.load(open('spotAuth.json'))
-        
-    client_id = credentials['client_id']
-    client_secret = credentials['client_secret']
-    client_credentials_manager = SpotifyClientCredentials(client_id=client_id,client_secret=client_secret)
-    sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
-
 
     #tkinter functions
     def switch():
@@ -109,7 +130,7 @@ if __name__ == "__main__":
         global dirname
         dirname = fd.askdirectory(
             title='download folder',
-            initialdir='/'
+            initialdir='D:/ZE'
             )
         
         if(len(dirname) > 1):
@@ -130,11 +151,14 @@ if __name__ == "__main__":
     def Start():
         URI = ytdEntry.get()
         choice = ytdchoices.get()
-        t1 = Thread(target = dispatch, args = (q, URI, dirname, choice))
+        t1 = threading.Thread(target = dispatch, args = (q, URI, dirname, choice))
         t1.start()
+        started = True 
     
-    f = q.get()
-    if q != None:
+    f = 0
+    if started == True:
+        f = q.get()
+    if type(f) == 'function':
         f()
 
 
@@ -207,4 +231,5 @@ if __name__ == "__main__":
     ScrollCheck.grid(column = 8, row = 0, sticky = "NSE", rowspan = 20)
 
     tk.mainloop()
+
 ##end
