@@ -51,6 +51,7 @@ def dispatch(out_q, URI, dirname, choice):
         
         select.download(dirname)
         print(song['title'] + f" name = {threading.current_thread().name}")
+    
     ytdError.config(text=" ")
     manCheck.delete(0,'end')
 
@@ -83,14 +84,19 @@ def dispatch(out_q, URI, dirname, choice):
 
         if YT is not None:
 
-            for i in range(0, len(YT), 1):
-                splitDur = YT[i]['duration'].split(':')
-                durVid = int(splitDur[0]) * 60 + int(splitDur[1])
-                durSong = playlist[i]['duration_ms'] // 1000 + 60
-                print(splitDur, durVid, durSong)
-                if durVid <= durSong:
-                    x = i
-                    break
+            if isOn:   
+                print(isOn)
+                out_q.put((manCheck.insert(i, YT[i]['name']) for i in range(YT)))
+
+            else: 
+                for i in range(0, len(YT), 1):
+                    splitDur = YT[i]['duration'].split(':')
+                    durVid = int(splitDur[0]) * 60 + int(splitDur[1])
+                    durSong = playlist[i]['duration_ms'] // 1000 + 60
+                    print(splitDur, durVid, durSong)
+                    if durVid <= durSong:
+                        x = i
+                        break
             
             if x != None:
                 downloadlist.append(YT[int(x)])
@@ -145,16 +151,20 @@ if __name__ == "__main__":
 
     #__end def screen__
     q = Queue()
+    r = Queue()
     def Start():
         URI = ytdEntry.get()
         choice = ytdchoices.get()
-        t1 = threading.Thread(target = dispatch, args = (q, URI, dirname, choice))
+        t1 = threading.Thread(target = dispatch, args = (q, r, URI, dirname, choice, isOn))
         t1.start()
         started = True 
     
     f = 0
     if started == True:
         f = q.get()
+        selection = manCheck.curselection()
+        if isOn and selection != None:
+            r.put(selection)
     if type(f) == 'function':
         f()
 
