@@ -18,7 +18,7 @@ isOn = False
 t1 = []
 started = False
 
-def dispatch(out_q, URI, dirname, choice):
+def dispatch(out_q, in_r, URI, dirname, choice, isOn):
 
     ##load in credentials
     try:
@@ -87,6 +87,7 @@ def dispatch(out_q, URI, dirname, choice):
             if isOn:   
                 print(isOn)
                 out_q.put((manCheck.insert(i, YT[i]['name']) for i in range(YT)))
+                x = in_r.get()
 
             else: 
                 for i in range(0, len(YT), 1):
@@ -102,10 +103,14 @@ def dispatch(out_q, URI, dirname, choice):
                 downloadlist.append(YT[int(x)])
 
             out_q.put(CurrentOp.insert(i, YT[int(x)]['title']))
-        
-    workers = 10
-    with ThreadPoolExecutor(max_workers=workers) as excecutor:
-        excecutor.map(ytsearch, range(len(playlist)))
+    
+    if isOn:
+        for i in range(0, len(playlist), 1):
+            ytsearch(i)
+    else:
+        workers = 10
+        with ThreadPoolExecutor(max_workers=workers) as excecutor:
+            excecutor.map(ytsearch, range(len(playlist)))
 
     workers = 10
     with ThreadPoolExecutor(max_workers=workers) as excecutor:
