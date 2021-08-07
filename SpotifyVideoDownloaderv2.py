@@ -37,14 +37,15 @@ def dispatch(out_q, in_r, URI, dirname, choice, isOn):
     def download(song, out_q, dirname, choice):
         url = "https://youtube.com" + song['url_suffix']
         choice = ytdchoices.get()
-
+        
+        print(url)
         if(len(url)>1):
             yt = YouTube(url)
             if(choice == choices[0]):
-                select = yt.streams.filter(progressive=True).first()
+                select = yt.streams.filter(progressive=True, file_extension='mp4').last()
 
             elif(choice == choices[1]):
-                select = yt.streams.filter(progressive=True,file_extension='mp4').last()
+                select = yt.streams.filter(progressive=True,file_extension='mp4').first()
 
             elif(choice == choices[2]):
                 select = yt.streams.filter(only_audio=True).first()
@@ -112,7 +113,7 @@ def dispatch(out_q, in_r, URI, dirname, choice, isOn):
         with ThreadPoolExecutor(max_workers=workers) as excecutor:
             excecutor.map(ytsearch, range(len(playlist)))
 
-    workers = 10
+    workers = 2
     with ThreadPoolExecutor(max_workers=workers) as excecutor:
         excecutor.map(download, downloadlist, repeat(q), repeat(dirname), repeat(choice))
 
@@ -206,7 +207,7 @@ if __name__ == "__main__":
     ytdQuality.grid(pady = 5, ipady = 15, ipadx = 15, padx = 10, column = 1, row = 6, sticky = "nsew")
 
     #combobox
-    choices = ["720p","144p","Only Audio"]
+    choices = ["High quality","Low Quality","Only Audio"]
     ytdchoices = ttk.Combobox(root,values=choices, font =("Arial",12, "bold"))
     ytdchoices.grid(pady = 5, ipady = 15, ipadx = 15, padx = 10, column = 1, row = 7, sticky = "nsew")
 
