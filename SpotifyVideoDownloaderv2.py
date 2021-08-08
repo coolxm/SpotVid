@@ -13,6 +13,7 @@ import requests
 from itertools import repeat
 from concurrent.futures import ThreadPoolExecutor
 
+#https://stackoverflow.com/questions/39086287/spotipy-how-to-read-more-than-100-tracks-from-a-playlist
 
 isOn = False
 t1 = []
@@ -60,14 +61,18 @@ def dispatch(out_q, in_r, URI, dirname, choice, isOn):
     playlist_id = URI
 
     try:
-        results = sp.user_playlist(username, playlist_id, 'tracks')
+        results = sp.user_playlist_tracks(username, playlist_id)
+        tracks = results['items']
+        while results['next']:
+            results = sp.next(results)
+            tracks.extend(results['items'])
     except Exception:    
         out_q.put(ytdError.config(text="Error, URI not found"))
         return
     
     playlist = []
-    for i in range(0, len(results['tracks']['items'])):
-        r = results['tracks']['items'][i]['track']
+    for i in range(0, len(tracks)):
+        r = tracks[i]['track']
         playlist.append(r)
         out_q.put(DisPlay.insert(i, r['name'] + " " + r['artists'][0]['name']))
 
