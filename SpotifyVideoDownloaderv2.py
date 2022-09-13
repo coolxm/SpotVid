@@ -8,7 +8,7 @@ from json import load
 from spotipy import Spotify
 from spotipy.oauth2 import SpotifyClientCredentials
 from youtube_search import YoutubeSearch
-from pytube import YouTube
+import pafy
 import requests
 from itertools import repeat
 from concurrent.futures import ThreadPoolExecutor
@@ -22,11 +22,11 @@ started = False
 def dispatch(out_q, in_r, URI, dirname, choice, isOn):
 
     ##load in credentials
-    try:
-        credentials = load(open(requests.get('http://localhost:8080/Oauth')))
-        print('went online')
-    except Exception:
-        credentials = load(open('spotAuth.json'))
+        ##try:
+        ##    credentials = load(open(requests.get('http://localhost:8080/Oauth')))
+        ##    print('went online')
+        ##except Exception:
+    credentials = load(open('spotAuth.json'))
         
     client_id = credentials['client_id']
     client_secret = credentials['client_secret']
@@ -35,24 +35,32 @@ def dispatch(out_q, in_r, URI, dirname, choice, isOn):
 
     out_q.put(ytdError.config(text="connected",fg="green"))
 
+
+  ##Download the songs based on URL Found by ytsearch
     def download(song, out_q, dirname, choice):
         url = "https://youtube.com" + song['url_suffix']
         choice = ytdchoices.get()
         
-        print(url)
         if(len(url)>1):
-            yt = YouTube(url)
+            try: 
+                yt = pafy.new(url)
+            except Exception:
+                    ytdError.config(text="Connection Error",fg="red")
+                    print("Exception in yt download step 1")
+            
             if(choice == choices[0]):
-                select = yt.streams.filter(progressive=True, file_extension='mp4').last()
-
+                select = yt.getbest(preftype="mp4")
+                ytdError.config(text="video download started, please wait",fg="green")
             elif(choice == choices[1]):
-                select = yt.streams.filter(progressive=True,file_extension='mp4').first()
-
+                select = yt.getbest(preftype="mp4")
             elif(choice == choices[2]):
-                select = yt.streams.filter(only_audio=True).first()
-        
-        select.download(dirname)
-        print(song['title'] + f" name = {threading.current_thread().name}")
+                select = yt.getbestaudio()
+        try: 
+            select.download(dirname)  
+        except Exception:
+            ytdError.config(text="Download Error",fg="red") 
+            print("exception in yt download step 2") 
+    
     
     ytdError.config(text=" ")
     manCheck.delete(0,'end')
@@ -60,6 +68,7 @@ def dispatch(out_q, in_r, URI, dirname, choice, isOn):
     username = "Test_1"
     playlist_id = URI
 
+  ##Look up input URI on Spotify
     try:
         results = sp.user_playlist_tracks(username, playlist_id)
         tracks = results['items']
@@ -70,6 +79,7 @@ def dispatch(out_q, in_r, URI, dirname, choice, isOn):
         out_q.put(ytdError.config(text="Error, URI not found"))
         return
     
+  ##Build list of track names from Spotify
     playlist = []
     for i in range(0, len(tracks)):
         r = tracks[i]['track']
@@ -80,21 +90,25 @@ def dispatch(out_q, in_r, URI, dirname, choice, isOn):
         out_q.put(ytdError.config(text="found playlist empty"))
         return
 
+
+  ##YTsearch : build list of URLS to download videos from
     downloadlist = []
     def ytsearch(i):
         #define youtube url's
         try:
+            ##Dependency YoutubeSearch is Fucked
             YT = YoutubeSearch(playlist[i]['name'] + " " + playlist[i]['artists'][0]['name'], max_results=5).to_dict()
         except Exception:
+            print("exception in yt search api")
             return None
 
         if YT is not None:
 
-            if isOn:   
-                print(isOn)
+            if isOn:  
                 out_q.put((manCheck.insert(i, YT[i]['name']) for i in range(YT)))
                 x = in_r.get()
-
+                
+        ##Sort YT urls so that they are the song and not music videos
             else: 
                 for i in range(0, len(YT), 1):
                     splitDur = YT[i]['duration'].split(':')
@@ -109,7 +123,9 @@ def dispatch(out_q, in_r, URI, dirname, choice, isOn):
                 downloadlist.append(YT[int(x)])
 
             out_q.put(CurrentOp.insert(i, YT[int(x)]['title']))
-    
+            
+            
+  ##Dispatch ytsearch
     if isOn:
         for i in range(0, len(playlist), 1):
             ytsearch(i)
@@ -124,9 +140,8 @@ def dispatch(out_q, in_r, URI, dirname, choice, isOn):
 
     out_q.put(CurrentOp.delete(0, 'end'))
     out_q.put(CurrentOp.insert(0, 'Done'))
-
-    
-
+ 
+##-----------------------------------------------------------------------------------------------------------------------------------------------------------------    
 
 if __name__ == "__main__":
 
@@ -144,7 +159,7 @@ if __name__ == "__main__":
         global dirname
         dirname = fd.askdirectory(
             title='download folder',
-            initialdir='D:/ZE'
+            initialdir='C:/'
             )
         
         if(len(dirname) > 1):
@@ -153,7 +168,6 @@ if __name__ == "__main__":
         else:
             locationError.config(text="Please Choose Folder!!",fg="red")
 
-#test commits
 ##def GUI
 #__start def screen__
 
@@ -165,10 +179,15 @@ if __name__ == "__main__":
     q = Queue()
     r = Queue()
     def Start():
+        CurrentOp.delete(0, 'end')
+        DisPlay.delete(0, 'end')
+        playlist = []
+        downloadlist = []
         URI = ytdEntry.get()
         choice = ytdchoices.get()
-        t1 = threading.Thread(target = dispatch, args = (q, r, URI, dirname, choice, isOn))
-        t1.start()
+        if (dirname != None):
+            t1 = threading.Thread(target = dispatch, args = (q, r, URI, dirname, choice, isOn))
+            t1.start()
         started = True 
     
     f = 0
