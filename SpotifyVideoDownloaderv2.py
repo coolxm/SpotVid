@@ -8,8 +8,7 @@ from json import load
 from spotipy import Spotify
 from spotipy.oauth2 import SpotifyClientCredentials
 from youtube_search import YoutubeSearch
-import pafy
-import requests
+from pytube import YouTube
 from itertools import repeat
 from concurrent.futures import ThreadPoolExecutor
 
@@ -43,20 +42,22 @@ def dispatch(out_q, in_r, URI, dirname, choice, isOn):
         
         if(len(url)>1):
             try: 
-                yt = pafy.new(url)
+                yt = YouTube(url)
             except Exception:
                     ytdError.config(text="Connection Error",fg="red")
                     print("Exception in yt download step 1")
             
             if(choice == choices[0]):
-                select = yt.getbest(preftype="mp4")
+                select = yt.streams.get_highest_resolution() 
                 ytdError.config(text="video download started, please wait",fg="green")
             elif(choice == choices[1]):
-                select = yt.getbest(preftype="mp4")
+                select = yt.streams.get_lowest_resolution() 
+                ytdError.config(text="video download started, please wait",fg="green")
             elif(choice == choices[2]):
-                select = yt.getbestaudio()
+                select = yt.streams.get_audio_only()
+                ytdError.config(text="video download started, please wait",fg="green")
         try: 
-            select.download(dirname)  
+            select.download(output_path = dirname)  
         except Exception:
             ytdError.config(text="Download Error",fg="red") 
             print("exception in yt download step 2") 
@@ -114,7 +115,7 @@ def dispatch(out_q, in_r, URI, dirname, choice, isOn):
                     splitDur = YT[i]['duration'].split(':')
                     durVid = int(splitDur[0]) * 60 + int(splitDur[1])
                     durSong = playlist[i]['duration_ms'] // 1000 + 60
-                    print(splitDur, durVid, durSong)
+             ##print(splitDur, durVid, durSong)
                     if durVid <= durSong:
                         x = i
                         break
@@ -190,7 +191,7 @@ if __name__ == "__main__":
             t1.start()
         started = True 
     
-    f = 0
+    f = None
     if started == True:
         f = q.get()
         selection = manCheck.curselection()
